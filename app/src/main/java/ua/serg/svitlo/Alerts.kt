@@ -60,12 +60,16 @@ object Alerts {
         }
     }
 
+    const val CHANNEL = "alerts"
+
+    fun channel(c: Context) = c.getSystemService(NotificationManager::class.java).createNotificationChannel(
+        NotificationChannel(CHANNEL, "Сигнали про світло", NotificationManager.IMPORTANCE_HIGH))
+
     fun notify(c: Context, id: Int, title: String, body: String) {
         val manager = c.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel("alerts", "Сигнали про світло", NotificationManager.IMPORTANCE_HIGH))
+        channel(c)
         val open = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        manager.notify(id, Notification.Builder(c, "alerts")
+        manager.notify(id, Notification.Builder(c, CHANNEL)
             .setSmallIcon(R.drawable.bolt).setContentTitle(title).setContentText(body)
             .setContentIntent(open).setAutoCancel(true).build())
     }

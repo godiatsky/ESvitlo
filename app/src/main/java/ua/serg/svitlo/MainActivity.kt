@@ -3,11 +3,15 @@ package ua.serg.svitlo
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.NotificationManager
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.widget.*
 
@@ -97,7 +101,7 @@ class MainActivity : Activity() {
         column.addView(alertRow("Сигнал перед відключенням", "leadOff"))
         column.addView(alertRow("Сигнал перед увімкненням", "leadOn"))
         val test = card(text("Перевірити сигнал", 15f, R.color.accent))
-        test.setOnClickListener { Alerts.notify(this, 99, "Перевірка сигналу", "Так виглядатиме сповіщення") }
+        test.setOnClickListener { testSignal() }
         column.addView(test)
 
         val refresh = card(text("Оновити", 17f, R.color.accent, true))
@@ -128,6 +132,42 @@ class MainActivity : Activity() {
             }.show()
         }
         return row
+    }
+
+    /** Показує тестовий сигнал або пояснює, чому звуку не буде, і відкриває потрібні налаштування. */
+    private fun testSignal() {
+        Alerts.channel(this)
+        val manager = getSystemService(NotificationManager::class.java)
+        val channel = manager.getNotificationChannel(Alerts.CHANNEL)
+        val audio = getSystemService(AudioManager::class.java)
+        val app = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        val sound = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, Alerts.CHANNEL)
+        when {
+            !manager.areNotificationsEnabled() ->
+                problem("Сповіщення для «Світло» вимкнені. Увімкніть їх.", app)
+            channel.importance < NotificationManager.IMPORTANCE_DEFAULT || channel.sound == null ->
+                problem("Канал сигналів беззвучний. Увімкніть звук.", sound)
+            audio.ringerMode != AudioManager.RINGER_MODE_NORMAL ->
+                problem("Телефон у беззвучному режимі або на вібрації. Увімкніть звук.", Intent(Settings.ACTION_SOUND_SETTINGS))
+            audio.getStreamVolume(AudioManager.STREAM_NOTIFICATION) == 0 ->
+                problem("Гучність сповіщень на нулі.", Intent(Settings.ACTION_SOUND_SETTINGS))
+            manager.currentInterruptionFilter > NotificationManager.INTERRUPTION_FILTER_ALL ->
+                problem("Увімкнено режим «Не турбувати».", Intent(Settings.ACTION_SOUND_SETTINGS))
+            else -> {
+                manager.cancel(99)
+                Alerts.notify(this, 99, "Перевірка сигналу", "Так звучатиме попередження")
+                problem("Тестовий сигнал надіслано. Якщо звуку не було, перевірте налаштування.", sound)
+            }
+        }
+    }
+
+    private fun problem(message: String, settings: Intent) {
+        AlertDialog.Builder(this).setMessage(message)
+            .setPositiveButton("Налаштування") { _, _ -> startActivity(settings) }
+            .setNegativeButton("Закрити", null).show()
     }
 
     private fun pick(current: String) {
