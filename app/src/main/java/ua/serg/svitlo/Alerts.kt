@@ -60,16 +60,35 @@ object Alerts {
         }
     }
 
-    const val CHANNEL = "alerts"
+    val MODES = arrayOf("Звук", "Особлива вібрація", "Звук і вібрація")
 
-    fun channel(c: Context) = c.getSystemService(NotificationManager::class.java).createNotificationChannel(
-        NotificationChannel(CHANNEL, "Сигнали про світло", NotificationManager.IMPORTANCE_HIGH))
+    // Пари «пауза, вібрація» в мс. Відключення: імпульси згасають. Увімкнення: наростають.
+    private val OFF_PATTERN = longArrayOf(0, 700, 150, 400, 150, 200, 150, 80)
+    private val ON_PATTERN = longArrayOf(0, 80, 150, 200, 150, 400, 150, 700)
 
-    fun notify(c: Context, id: Int, title: String, body: String) {
+    fun mode(c: Context) = c.getSharedPreferences("svitlo", Context.MODE_PRIVATE).getInt("signal", 0)
+
+    /** Android фіксує звук і вібрацію за каналом, тому кожен варіант має власний канал. */
+    fun channel(c: Context, off: Boolean): String {
+        val mode = mode(c)
+        val id = if (mode == 0) "alerts" else "alerts_${mode}_${if (off) "off" else "on"}"
+        val name = if (mode == 0) "Сигнали про світло" else
+            "${MODES[mode]}: ${if (off) "відключення" else "увімкнення"}"
+        val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
+        if (mode != 0) {
+            channel.enableVibration(true)
+            channel.vibrationPattern = if (off) OFF_PATTERN else ON_PATTERN
+            if (mode == 1) channel.setSound(null, null)
+        }
+        c.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        return id
+    }
+
+    fun notify(c: Context, id: Int, title: String, body: String, off: Boolean = id != 2) {
         val manager = c.getSystemService(NotificationManager::class.java)
-        channel(c)
+        val channel = channel(c, off)
         val open = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        manager.notify(id, Notification.Builder(c, CHANNEL)
+        manager.notify(id, Notification.Builder(c, channel)
             .setSmallIcon(R.drawable.bolt).setContentTitle(title).setContentText(body)
             .setContentIntent(open).setAutoCancel(true).build())
     }

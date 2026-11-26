@@ -100,9 +100,20 @@ class MainActivity : Activity() {
 
         column.addView(alertRow("Сигнал перед відключенням", "leadOff"))
         column.addView(alertRow("Сигнал перед увімкненням", "leadOn"))
-        val test = card(text("Перевірити сигнал", 15f, R.color.accent))
-        test.setOnClickListener { testSignal() }
-        column.addView(test)
+        val mode = Alerts.mode(this)
+        val kind = card(text("Тип сигналу", 17f, bold = true), text("${Alerts.MODES[mode]}  ›", 14f, R.color.sub))
+        kind.setOnClickListener {
+            AlertDialog.Builder(this).setTitle("Тип сигналу").setSingleChoiceItems(Alerts.MODES, mode) { dialog, i ->
+                prefs.edit().putInt("signal", i).apply()
+                dialog.dismiss()
+            }.show()
+        }
+        column.addView(kind)
+        for ((title, off) in listOf("Перевірити: відключення" to true, "Перевірити: увімкнення" to false)) {
+            val test = card(text(title, 15f, R.color.accent))
+            test.setOnClickListener { testSignal(off) }
+            column.addView(test)
+        }
 
         val refresh = card(text("Оновити", 17f, R.color.accent, true))
         refresh.setOnClickListener {
@@ -135,31 +146,35 @@ class MainActivity : Activity() {
     }
 
     /** Показує тестовий сигнал або пояснює, чому звуку не буде, і відкриває потрібні налаштування. */
-    private fun testSignal() {
-        Alerts.channel(this)
+    private fun testSignal(off: Boolean) {
+        val id = Alerts.channel(this, off)
+        val mode = Alerts.mode(this)
         val manager = getSystemService(NotificationManager::class.java)
-        val channel = manager.getNotificationChannel(Alerts.CHANNEL)
+        val channel = manager.getNotificationChannel(id)
         val audio = getSystemService(AudioManager::class.java)
         val app = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
         val sound = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-            .putExtra(Settings.EXTRA_CHANNEL_ID, Alerts.CHANNEL)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, id)
         when {
             !manager.areNotificationsEnabled() ->
                 problem("Сповіщення для «Світло» вимкнені. Увімкніть їх.", app)
-            channel.importance < NotificationManager.IMPORTANCE_DEFAULT || channel.sound == null ->
-                problem("Канал сигналів беззвучний. Увімкніть звук.", sound)
-            audio.ringerMode != AudioManager.RINGER_MODE_NORMAL ->
-                problem("Телефон у беззвучному режимі або на вібрації. Увімкніть звук.", Intent(Settings.ACTION_SOUND_SETTINGS))
-            audio.getStreamVolume(AudioManager.STREAM_NOTIFICATION) == 0 ->
+            channel.importance < NotificationManager.IMPORTANCE_DEFAULT ||
+                (mode != 1 && channel.sound == null) || (mode != 0 && !channel.shouldVibrate()) ->
+                problem("У каналі сигналів вимкнено звук або вібрацію.", sound)
+            mode == 0 && audio.ringerMode != AudioManager.RINGER_MODE_NORMAL ->
+                problem("Телефон у беззвучному режимі. Увімкніть звук або оберіть вібрацію.", Intent(Settings.ACTION_SOUND_SETTINGS))
+            audio.ringerMode == AudioManager.RINGER_MODE_SILENT ->
+                problem("Телефон у режимі «Без звуку»: увімкніть звук або вібрацію.", Intent(Settings.ACTION_SOUND_SETTINGS))
+            mode == 0 && audio.getStreamVolume(AudioManager.STREAM_NOTIFICATION) == 0 ->
                 problem("Гучність сповіщень на нулі.", Intent(Settings.ACTION_SOUND_SETTINGS))
             manager.currentInterruptionFilter > NotificationManager.INTERRUPTION_FILTER_ALL ->
                 problem("Увімкнено режим «Не турбувати».", Intent(Settings.ACTION_SOUND_SETTINGS))
             else -> {
                 manager.cancel(99)
-                Alerts.notify(this, 99, "Перевірка сигналу", "Так звучатиме попередження")
-                problem("Тестовий сигнал надіслано. Якщо звуку не було, перевірте налаштування.", sound)
+                Alerts.notify(this, 99, "Перевірка сигналу", Alerts.MODES[mode], off)
+                problem("Тестовий сигнал надіслано. Якщо його не було, перевірте налаштування.", sound)
             }
         }
     }
