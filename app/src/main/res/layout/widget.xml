@@ -1,0 +1,12 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="10dp" android:background="#E6101418">
+    <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="14sp" android:text="Світло"/>
+    <ImageView android:id="@+id/today" android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:scaleType="fitXY" android:contentDescription="Сьогодні"/>
+    <TextView android:id="@+id/todayText" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textColor="#DDDDDD" android:textSize="12sp"/>
+    <TextView android:id="@+id/tomorrowText" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textColor="#AAAAAA" android:textSize="12sp"/>
+</LinearLayout>
