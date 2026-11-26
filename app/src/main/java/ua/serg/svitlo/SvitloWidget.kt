@@ -48,12 +48,14 @@ class SvitloWidget : AppWidgetProvider() {
                 val v = RemoteViews(context.packageName, R.layout.widget)
                 v.setTextColor(R.id.dot, Timeline.color(context, s.power))
                 v.setTextViewText(R.id.status, s.headline)
-                v.setTextViewText(R.id.group, "Черга ${s.group}")
+                v.setTextViewText(R.id.group, if (s.group.isEmpty()) "" else "Черга ${s.group}")
                 v.setTextViewText(R.id.until, s.detail)
-                v.setImageViewBitmap(R.id.bar, Timeline.draw(context, s.today, s.now, width - 32))
-                val error = s.footer.startsWith("Немає")
-                v.setTextViewText(R.id.footer, if (error) s.footer else "Завтра: ${Schedule.summary(s.tomorrow)}")
-                v.setViewVisibility(R.id.footer, if (height >= 120) View.VISIBLE else View.GONE)
+                v.setImageViewBitmap(R.id.bar, Timeline.draw(context, s.today, s.now, width - 32, (height - 96).coerceIn(40, 110)))
+                val tomorrow = if (s.tomorrow?.known == true) "Завтра без світла: " +
+                    Schedule.summary(s.tomorrow) else null
+                v.setTextViewText(R.id.footer, if (s.stale || tomorrow == null || height >= 150)
+                    listOfNotNull(tomorrow, s.footer).joinToString("\n") else "$tomorrow · ${s.footer}")
+                v.setViewVisibility(R.id.until, if (height >= 150 || s.power == Power.UNKNOWN) View.VISIBLE else View.GONE)
                 v.setOnClickPendingIntent(R.id.root, open)
                 manager.updateAppWidget(id, v)
             }

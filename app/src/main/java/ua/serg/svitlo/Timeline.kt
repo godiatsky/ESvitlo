@@ -10,37 +10,62 @@ object Timeline {
         Power.UNKNOWN -> R.color.unknown
     })
 
-    /** Малює шкалу доби в точному розмірі, щоб цифри не розтягувались. */
-    fun draw(c: Context, day: Day?, now: Int?, widthDp: Int): Bitmap {
+    /** Шкала доби: штрихування = відключення, минуле приглушене, підписані моменти перемикань. */
+    fun draw(c: Context, day: Day?, now: Int?, widthDp: Int, heightDp: Int = 44): Bitmap {
         val d = c.resources.displayMetrics.density.coerceAtMost(3f)
         val w = widthDp.coerceIn(180, 480) * d
-        val bmp = Bitmap.createBitmap(w.toInt(), (36 * d).toInt(), Bitmap.Config.ARGB_8888)
+        val h = heightDp * d
+        val bmp = Bitmap.createBitmap(w.toInt(), h.toInt(), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        val top = 4 * d
-        val bottom = 18 * d
-        val clip = Path().apply { addRoundRect(0f, top, w, bottom, 7 * d, 7 * d, Path.Direction.CW) }
+        val top = 3 * d
+        val bottom = h - 19 * d
+        fun x(m: Int) = w * m / 1440
+        val clip = Path().apply { addRoundRect(0f, top, w, bottom, 8 * d, 8 * d, Path.Direction.CW) }
         canvas.save()
         canvas.clipPath(clip)
         p.color = color(c, Power.UNKNOWN)
         canvas.drawRect(0f, top, w, bottom, p)
         if (day != null && day.known) for (s in day.slots) {
             p.color = color(c, s.power)
-            canvas.drawRect(w * s.start / 1440, top, w * s.end / 1440, bottom, p)
+            canvas.drawRect(x(s.start), top, x(s.end), bottom, p)
+            if (s.power == Power.OFF) {
+                canvas.save()
+                canvas.clipRect(x(s.start), top, x(s.end), bottom)
+                p.color = 0x55000000
+                p.strokeWidth = 2 * d
+                var l = x(s.start) - (bottom - top)
+                while (l < x(s.end)) {
+                    canvas.drawLine(l, bottom, l + bottom - top, top, p)
+                    l += 7 * d
+                }
+                canvas.restore()
+            }
+        }
+        if (now != null) {
+            p.color = (c.getColor(R.color.card) and 0x00FFFFFF) or (0x99 shl 24)
+            canvas.drawRect(0f, top, x(now), bottom, p)
         }
         canvas.restore()
         if (now != null) {
-            val x = (w * now / 1440).coerceIn(3 * d, w - 3 * d)
-            p.color = c.getColor(R.color.card)
-            canvas.drawRoundRect(x - 3 * d, 0f, x + 3 * d, bottom + 4 * d, 3 * d, 3 * d, p)
+            val m = x(now).coerceIn(2 * d, w - 2 * d)
             p.color = c.getColor(R.color.text)
-            canvas.drawRoundRect(x - 1.5f * d, 1.5f * d, x + 1.5f * d, bottom + 2.5f * d, 1.5f * d, 1.5f * d, p)
+            canvas.drawRoundRect(m - 1.5f * d, 0f, m + 1.5f * d, bottom + 3 * d, 1.5f * d, 1.5f * d, p)
         }
-        p.color = c.getColor(R.color.sub)
-        p.textSize = 10 * d
-        for (h in 0..24 step 6) {
-            p.textAlign = if (h == 0) Paint.Align.LEFT else if (h == 24) Paint.Align.RIGHT else Paint.Align.CENTER
-            canvas.drawText("%02d".format(h), w * h / 24, 33 * d, p)
+        p.color = c.getColor(R.color.text)
+        p.textSize = 11 * d
+        val changes = if (day != null && day.known)
+            day.slots.zipWithNext().filter { it.first.power != it.second.power }.map { it.second.start }
+        else emptyList()
+        val labels = if (changes.isEmpty()) listOf(0, 360, 720, 1080, 1440) else changes
+        var used = -100f
+        for (m in labels) {
+            val t = Schedule.time(m)
+            val tw = p.measureText(t)
+            val left = (x(m) - tw / 2).coerceIn(0f, w - tw)
+            if (left < used + 4 * d) continue
+            canvas.drawText(t, left, h - 4 * d, p)
+            used = left + tw
         }
         return bmp
     }

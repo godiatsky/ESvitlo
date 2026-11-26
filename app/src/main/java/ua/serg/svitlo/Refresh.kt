@@ -24,6 +24,7 @@ class Refresh(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
         } catch (e: Exception) { false }
         prefs.edit().putBoolean("error", !ok).apply()
         SvitloWidget.render(applicationContext)
+        Alerts.check(applicationContext)
         return Result.success()
     }
 

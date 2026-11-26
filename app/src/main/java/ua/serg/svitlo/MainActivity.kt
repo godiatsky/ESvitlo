@@ -1,9 +1,12 @@
 package ua.serg.svitlo
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.*
@@ -15,6 +18,16 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Refresh.schedule(this)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        if (prefs.getString("group", "").isNullOrEmpty()) AddressSearch(this) { changed() }.start()
+    }
+
+    private fun changed() {
+        SvitloWidget.render(this)
+        Alerts.check(this)
+        show()
     }
 
     override fun onResume() {
@@ -22,6 +35,7 @@ class MainActivity : Activity() {
         prefs.registerOnSharedPreferenceChangeListener(listener)
         show()
         SvitloWidget.render(this)
+        Alerts.check(this)
         Refresh.now(this)
     }
 
@@ -66,16 +80,25 @@ class MainActivity : Activity() {
         val headline = text(s.headline, 28f, bold = true).apply {
             setTextColor(if (s.power == Power.UNKNOWN) getColor(R.color.text) else Timeline.color(context, s.power))
         }
-        column.addView(card(headline, text(s.detail, 16f, R.color.sub)))
+        column.addView(card(headline, text(s.detail, 15f, R.color.sub)))
         column.addView(card(text("Сьогодні", 17f, bold = true), bar(s.today, s.now),
             text(Schedule.summary(s.today), 15f, R.color.sub)))
         column.addView(card(text("Завтра", 17f, bold = true), bar(s.tomorrow, null),
             text(Schedule.summary(s.tomorrow), 15f, R.color.sub)))
 
-        val queue = card(text("Черга ${s.group}   ›", 17f, bold = true),
-            text("Перевірте номер своєї черги на сайті Yasno", 13f, R.color.sub))
-        queue.setOnClickListener { pick(s.group) }
-        column.addView(queue)
+        val address = card(text(prefs.getString("address", null) ?: "Вказати адресу", 17f, bold = true),
+            text(if (s.group.isEmpty()) "Чергу не обрано" else "Черга ${s.group}  ·  змінити ›", 14f, R.color.sub))
+        address.setOnClickListener { AddressSearch(this) { changed() }.start() }
+        column.addView(address)
+        val manual = card(text("Обрати чергу вручну  ›", 15f, R.color.accent))
+        manual.setOnClickListener { pick(s.group) }
+        column.addView(manual)
+
+        column.addView(alertRow("Сигнал перед відключенням", "leadOff"))
+        column.addView(alertRow("Сигнал перед увімкненням", "leadOn"))
+        val test = card(text("Перевірити сигнал", 15f, R.color.accent))
+        test.setOnClickListener { Alerts.notify(this, 99, "Перевірка сигналу", "Так виглядатиме сповіщення") }
+        column.addView(test)
 
         val refresh = card(text("Оновити", 17f, R.color.accent, true))
         refresh.setOnClickListener {
@@ -92,6 +115,21 @@ class MainActivity : Activity() {
         scroll.post { scroll.scrollTo(0, y) }
     }
 
+    private fun alertRow(title: String, key: String): View {
+        val values = intArrayOf(0, 5, 10, 15, 30, 60)
+        val names = values.map { if (it == 0) "Вимкнено" else "За $it хв" }.toTypedArray()
+        val current = values.indexOf(prefs.getInt(key, 0)).coerceAtLeast(0)
+        val row = card(text(title, 17f, bold = true), text("${names[current]}  ›", 14f, R.color.sub))
+        row.setOnClickListener {
+            AlertDialog.Builder(this).setTitle(title).setSingleChoiceItems(names, current) { dialog, i ->
+                prefs.edit().putInt(key, values[i]).apply()
+                dialog.dismiss()
+                changed()
+            }.show()
+        }
+        return row
+    }
+
     private fun pick(current: String) {
         val list = Schedule.groups(this)
         if (list.isEmpty()) {
@@ -100,8 +138,8 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this).setTitle("Ваша черга")
             .setSingleChoiceItems(list.toTypedArray(), list.indexOf(current)) { dialog, i ->
-                prefs.edit().putString("group", list[i]).apply()
-                SvitloWidget.render(this)
+                prefs.edit().putString("group", list[i]).remove("address").apply()
+                changed()
                 dialog.dismiss()
             }.show()
     }

@@ -18,7 +18,7 @@ class Day(val date: String, val status: String, val slots: List<Slot>) {
 class State(
     val group: String, val now: Int, val today: Day?, val tomorrow: Day?,
     val headline: String, val detail: String, val power: Power,
-    val footer: String, val nextChange: Int?
+    val footer: String, val nextChange: Int?, val stale: Boolean
 )
 
 object Schedule {
@@ -66,7 +66,7 @@ object Schedule {
 
     fun load(c: Context): State {
         val prefs = c.getSharedPreferences("svitlo", Context.MODE_PRIVATE)
-        val group = prefs.getString("group", "1.1")!!
+        val group = prefs.getString("group", "")!!
         val data = try { JSONObject(prefs.getString("json", "{}")!!).optJSONObject(group) } catch (e: Exception) { null }
 
         val cal = Calendar.getInstance(zone)
@@ -86,27 +86,32 @@ object Schedule {
         if (power != Power.UNKNOWN) while (end < 2880 && at(end) == power) end++
         val changes = power != Power.UNKNOWN && end < 2880 && at(end) != Power.UNKNOWN
 
+        val clock = if (end >= 1440 && end % 1440 != 0) "завтра " + time(end % 1440)
+            else if (end > 1440) "кінця завтра" else if (end == 1440) "24:00" else time(end)
         val headline = when {
+            group.isEmpty() -> "Оберіть адресу"
             today?.status == "EmergencyShutdowns" -> "Екстрені відключення"
-            power == Power.ON -> "Світло є"
-            power == Power.OFF -> "Світла немає"
+            power == Power.ON -> "Світло є до $clock"
+            power == Power.OFF -> "Без світла до $clock"
             else -> "Немає даних"
         }
-        val clock = (if (end >= 1440) "завтра " else "") + time(end % 1440)
         val detail = when {
+            group.isEmpty() -> "Торкніться, щоб визначити чергу"
             today?.status == "EmergencyShutdowns" -> "Графік тимчасово не діє"
             power == Power.UNKNOWN -> "Оновіть, коли буде інтернет"
-            !changes -> if (end > 1440) "За графіком без змін до кінця завтра" else "За графіком без змін до 24:00"
-            else -> (if (power == Power.ON) "Вимкнуть о " else "Увімкнуть о ") + clock + " · через " + duration(end - now)
+            else -> "За графіком Yasno, не фактичний стан"
         }
 
         val loaded = prefs.getLong("loaded", 0)
+        val old = System.currentTimeMillis() - loaded > 3 * 3600_000L
         val stamp = if (loaded == 0L) "ще не оновлено" else "оновлено " +
             SimpleDateFormat("dd.MM HH:mm", Locale.US).apply { timeZone = zone }.format(Date(loaded))
-        val footer = if (prefs.getBoolean("error", false)) "Немає зв’язку · $stamp" else "За графіком Yasno · $stamp"
+        val stale = old || prefs.getBoolean("error", false)
+        val footer = if (stale) "⚠ Дані можуть бути застарілими · $stamp" else stamp.replaceFirstChar { it.uppercase() }
 
-        // Наступне перемальовування: зміна стану або північ
-        val next = (if (changes && end < 1440) end else 1440) - now
-        return State(group, now, today, tomorrow, headline, detail, power, footer, next)
+        // Наступне перемальовування: зміна стану, застарівання даних або північ
+        var next = (if (changes && end < 1440) end else 1440) - now
+        if (!old) next = minOf(next, ((loaded + 3 * 3600_000L - System.currentTimeMillis()) / 60_000L).toInt() + 1)
+        return State(group, now, today, tomorrow, headline, detail, power, footer, next, stale)
     }
 }
