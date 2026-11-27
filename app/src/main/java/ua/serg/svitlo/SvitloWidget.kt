@@ -62,7 +62,7 @@ class SvitloWidget : AppWidgetProvider() {
                     Intent(context, SvitloWidget::class.java).setAction(TICK),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 context.getSystemService(AlarmManager::class.java)
-                    .setAndAllowWhileIdle(AlarmManager.RTC, System.currentTimeMillis() + it * 60_000L, tick)
+                    .setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + it * 60_000L, tick)
             }
         }
     }

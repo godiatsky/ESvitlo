@@ -49,6 +49,17 @@ class AllWidget : AppWidgetProvider() {
             Power.UNKNOWN -> R.color.sub
         })
 
+        /** Тонкий рядок: іконка, назва, стан праворуч, шкала на всю ширину. */
+        fun compact(c: Context, place: Place, s: State, widthDp: Int, hint: Boolean) =
+            RemoteViews(c.packageName, R.layout.widget_row).apply {
+                setImageViewResource(R.id.icon, Icons.light(place.icon))
+                setTextViewText(R.id.name, place.name)
+                setTextViewText(R.id.status, s.headline)
+                setTextColor(R.id.status, color(c, s.power))
+                setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, widthDp, 6, false))
+                setViewVisibility(R.id.hint, if (hint) View.VISIBLE else View.GONE)
+            }
+
         fun draw(c: Context, manager: AppWidgetManager, id: Int) =
             draw(c, manager, id, Places.all(c)) { promote(c, it) }
 
@@ -63,9 +74,9 @@ class AllWidget : AppWidgetProvider() {
             val states = places.map { Schedule.load(c, it) }
             val stale = states.any { it.stale }
             // Повна картка: шапка 42dp + шкала від 30dp. Тонкий рядок 34dp. Примітка 14dp.
-            val head = 42; val minFull = head + 30; val row = 34
+            val head = 34; val minFull = head + 30; val row = 36
             val n = places.size
-            var avail = height - 16 - (if (stale) 14 else 0)
+            var avail = height - 12 - (if (stale) 14 else 0)
             val full: Int
             val shown: Int
             when {
@@ -74,26 +85,23 @@ class AllWidget : AppWidgetProvider() {
                 n * row <= avail -> { full = 0; shown = n }              // усі тонкі
                 else -> { avail -= 14; full = 0; shown = (avail / row).coerceIn(1, n) }
             }
-            val barHeight = if (full == 0) 30 else (avail - (shown - 1) * row - head).coerceIn(30, 56)
+            val barHeight = if (full == 0) 30 else (avail - (shown - 1) * row - head).coerceIn(30, 90)
 
             val v = RemoteViews(c.packageName, R.layout.widget_all)
             v.removeAllViews(R.id.rows)
             places.take(shown).forEachIndexed { i, place ->
                 val s = states[i]
-                val big = i < full
-                val view = RemoteViews(c.packageName, if (big) R.layout.widget_main else R.layout.widget_row)
-                view.setImageViewResource(R.id.icon, if (big) Icons.thin(place.icon) else Icons.light(place.icon))
-                view.setTextViewText(R.id.name, place.name)
-                view.setTextViewText(R.id.status, s.headline)
-                view.setTextColor(R.id.status, color(c, s.power))
-                if (big) {
-                    view.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 28, barHeight))
-                    view.setOnClickPendingIntent(R.id.main, open(c, place.id))
-                } else {
-                    view.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 60, 6, false))
-                    // «⇧» має сенс, лише коли є повна картка, на місце якої можна підняти
-                    view.setViewVisibility(R.id.hint, if (full > 0) View.VISIBLE else View.GONE)
-                    view.setOnClickPendingIntent(R.id.row, if (full > 0) promote(place.id) else open(c, place.id))
+                val view = if (i < full) {
+                    val big = RemoteViews(c.packageName, R.layout.widget_main)
+                    big.setImageViewResource(R.id.icon, Icons.thin(place.icon))
+                    big.setTextViewText(R.id.name, place.name)
+                    big.setTextViewText(R.id.status, s.headline)
+                    big.setTextColor(R.id.status, color(c, s.power))
+                    big.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 24, barHeight))
+                    big.setOnClickPendingIntent(R.id.main, open(c, place.id))
+                    big
+                } else compact(c, place, s, width - 24, full > 0).apply {
+                    setOnClickPendingIntent(R.id.row, if (full > 0) promote(place.id) else open(c, place.id))
                 }
                 v.addView(R.id.rows, view)
             }
