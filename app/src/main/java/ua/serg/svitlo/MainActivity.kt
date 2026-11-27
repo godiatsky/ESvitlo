@@ -9,6 +9,9 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
+import android.view.Gravity
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -19,13 +22,21 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("svitlo", MODE_PRIVATE) }
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> runOnUiThread { show() } }
 
+    private var selected = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Refresh.schedule(this)
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-        if (prefs.getString("group", "").isNullOrEmpty()) AddressSearch(this) { changed() }.start()
+        selected = savedInstanceState?.getLong("place") ?: intent.getLongExtra("place", 0L)
+        if (Places.all(this).isEmpty()) add()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putLong("place", selected)
     }
 
     private fun changed() {
@@ -67,7 +78,10 @@ class MainActivity : Activity() {
     }
 
     private fun show() {
-        val s = Schedule.load(this)
+        val places = Places.all(this)
+        val place = places.firstOrNull { it.id == selected } ?: places.firstOrNull()
+        selected = place?.id ?: 0L
+        val s = Schedule.load(this, place)
         val width = (resources.configuration.screenWidthDp - 80).coerceAtMost(480)
         fun bar(day: Day?, now: Int?) = ImageView(this).apply {
             setImageBitmap(Timeline.draw(this@MainActivity, day, now, width))
@@ -80,6 +94,7 @@ class MainActivity : Activity() {
             setPadding(dp(20), dp(24), dp(20), dp(32))
         }
         column.addView(text("Світло", 34f, bold = true))
+        column.addView(chips(places))
 
         val headline = text(s.headline, 28f, bold = true).apply {
             setTextColor(if (s.power == Power.UNKNOWN) getColor(R.color.text) else Timeline.color(context, s.power))
@@ -90,13 +105,24 @@ class MainActivity : Activity() {
         column.addView(card(text("Завтра", 17f, bold = true), bar(s.tomorrow, null),
             text(Schedule.summary(s.tomorrow), 15f, R.color.sub)))
 
-        val address = card(text(prefs.getString("address", null) ?: "Вказати адресу", 17f, bold = true),
-            text(if (s.group.isEmpty()) "Чергу не обрано" else "Черга ${s.group}  ·  змінити ›", 14f, R.color.sub))
-        address.setOnClickListener { AddressSearch(this) { changed() }.start() }
-        column.addView(address)
-        val manual = card(text("Обрати чергу вручну  ›", 15f, R.color.accent))
-        manual.setOnClickListener { pick(s.group) }
-        column.addView(manual)
+        if (place != null) {
+            val edit = card(text("${place.icon}  ${place.name}", 17f, bold = true),
+                text("${place.address.ifEmpty { "Адресу не вказано" }}\nЧерга ${place.group}  ·  змінити ›", 14f, R.color.sub))
+            edit.setOnClickListener { menu(place) }
+            column.addView(edit)
+            val signals = Switch(this).apply {
+                text = "Сигнали для цієї локації"
+                textSize = 16f
+                setTextColor(getColor(R.color.text))
+                isChecked = place.alerts
+                setOnCheckedChangeListener { _, on ->
+                    if (!on) Alerts.cancel(this@MainActivity, place.id)
+                    Places.save(this@MainActivity, place.copy(alerts = on))
+                    changed()
+                }
+            }
+            column.addView(card(signals))
+        }
 
         column.addView(alertRow("Сигнал перед відключенням", "leadOff"))
         column.addView(alertRow("Сигнал перед увімкненням", "leadOn"))
@@ -185,17 +211,130 @@ class MainActivity : Activity() {
             .setNegativeButton("Закрити", null).show()
     }
 
-    private fun pick(current: String) {
+    private fun chips(places: List<Place>): View {
+        val row = LinearLayout(this)
+        fun chip(icon: String, label: String, active: Boolean, click: () -> Unit) {
+            val view = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setOnClickListener { click() }
+            }
+            view.addView(text(icon, 28f).apply {
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(getColor(R.color.card))
+                    if (active) setStroke(dp(3), getColor(R.color.accent))
+                }
+            }, LinearLayout.LayoutParams(dp(64), dp(64)))
+            view.addView(text(label, 12f, if (active) R.color.text else R.color.sub, active).apply {
+                gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(dp(76), -2))
+            row.addView(view)
+        }
+        places.forEach { p -> chip(p.icon, p.name, p.id == selected) { selected = p.id; show() } }
+        chip("➕", "Додати", false) { add() }
+        return HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            setPadding(0, dp(12), 0, 0)
+            addView(row)
+        }
+    }
+
+    /** Нова локація: іконка та назва → адреса або черга. */
+    private fun add() = look(null) { icon, name ->
+        source { group, address ->
+            val place = Place(Places.newId(this), name, icon, group, address, true)
+            selected = place.id
+            Places.save(this, place)
+            changed()
+        }
+    }
+
+    private fun menu(place: Place) {
+        val items = arrayOf("Іконка та назва", "Адреса або черга", "Видалити локацію")
+        AlertDialog.Builder(this).setTitle("${place.icon} ${place.name}").setItems(items) { _, i ->
+            when (i) {
+                0 -> look(place) { icon, name -> Places.save(this, place.copy(icon = icon, name = name)); changed() }
+                1 -> source { group, address ->
+                    Alerts.cancel(this, place.id)
+                    Places.save(this, place.copy(group = group, address = address))
+                    changed()
+                }
+                else -> AlertDialog.Builder(this).setMessage("Видалити «${place.name}»?")
+                    .setPositiveButton("Видалити") { _, _ ->
+                        Alerts.cancel(this, place.id)
+                        Places.delete(this, place.id)
+                        changed()
+                    }.setNegativeButton("Скасувати", null).show()
+            }
+        }.show()
+    }
+
+    private fun look(place: Place?, done: (icon: String, name: String) -> Unit) {
+        var icon = place?.icon ?: Places.ICONS[0].first
+        val name = EditText(this).apply {
+            hint = "Назва"
+            isSingleLine = true
+            setText(place?.name ?: Places.ICONS[0].second)
+        }
+        val grid = GridLayout(this).apply { columnCount = 5 }
+        val cells = ArrayList<TextView>()
+        fun mark() = cells.forEach {
+            it.background = if (it.text.toString() != icon) null else GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setStroke(dp(3), getColor(R.color.accent))
+            }
+        }
+        for ((emoji, label) in Places.ICONS) {
+            val cell = text(emoji, 28f).apply {
+                gravity = Gravity.CENTER
+                contentDescription = label
+                layoutParams = GridLayout.LayoutParams(GridLayout.spec(GridLayout.UNDEFINED),
+                    GridLayout.spec(GridLayout.UNDEFINED, 1f)).apply { width = 0; height = dp(56) }
+            }
+            cell.setOnClickListener {
+                // Назву, яку користувач ввів сам, не перезаписуємо
+                val typed = name.text.toString()
+                if (typed.isBlank() || Places.ICONS.any { it.second == typed }) name.setText(label)
+                icon = emoji
+                mark()
+            }
+            cells.add(cell)
+            grid.addView(cell)
+        }
+        mark()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(12), dp(20), 0)
+            addView(grid)
+            addView(name)
+        }
+        AlertDialog.Builder(this).setTitle(if (place == null) "Нова локація" else "Іконка та назва")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("Далі") { _, _ ->
+                val typed = name.text.toString().trim()
+                done(icon, typed.ifEmpty { Places.ICONS.first { it.first == icon }.second })
+            }.setNegativeButton("Скасувати", null).show()
+    }
+
+    private fun source(done: (group: String, address: String) -> Unit) {
+        AlertDialog.Builder(this).setTitle("Як визначити чергу?")
+            .setItems(arrayOf("Пошук за адресою", "Обрати чергу вручну")) { _, i ->
+                if (i == 0) AddressSearch(this, done).start() else pick { done(it, "") }
+            }.show()
+    }
+
+    private fun pick(done: (String) -> Unit) {
         val list = Schedule.groups(this)
         if (list.isEmpty()) {
-            Toast.makeText(this, "Спочатку потрібно завантажити графік", Toast.LENGTH_SHORT).show()
+            Refresh.now(this)
+            Toast.makeText(this, "Графік ще завантажується, спробуйте за мить", Toast.LENGTH_SHORT).show()
             return
         }
         AlertDialog.Builder(this).setTitle("Ваша черга")
-            .setSingleChoiceItems(list.toTypedArray(), list.indexOf(current)) { dialog, i ->
-                prefs.edit().putString("group", list[i]).remove("address").apply()
-                changed()
-                dialog.dismiss()
-            }.show()
+            .setItems(list.toTypedArray()) { _, i -> done(list[i]) }.show()
     }
 }

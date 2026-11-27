@@ -2,7 +2,6 @@ package ua.serg.svitlo
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -17,7 +16,7 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 /** Визначення черги: вулиця → будинок → черга. Підказки з’являються під час введення. */
-class AddressSearch(private val a: Activity, private val done: () -> Unit) {
+class AddressSearch(private val a: Activity, private val done: (group: String, address: String) -> Unit) {
     private class Item(val id: Long, val name: String) { override fun toString() = name }
 
     private val main = Handler(Looper.getMainLooper())
@@ -42,10 +41,8 @@ class AddressSearch(private val a: Activity, private val done: () -> Unit) {
             main.post {
                 if (a.isFinishing || a.isDestroyed) return@post
                 result.onSuccess {
-                    a.getSharedPreferences("svitlo", Context.MODE_PRIVATE).edit()
-                        .putString("group", it).putString("address", "${street.name}, ${house.name}").apply()
-                    toast("Ваша черга: $it")
-                    done()
+                    toast("Черга: $it")
+                    done(it, "${street.name}, ${house.name}")
                 }.onFailure { toast("Не вдалося визначити чергу: ${it.message}") }
             }
         }

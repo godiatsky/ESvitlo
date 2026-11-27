@@ -64,9 +64,9 @@ object Schedule {
         return off.joinToString { "${time(it.start)}–${time(it.end)}" }
     }
 
-    fun load(c: Context): State {
+    fun load(c: Context, place: Place?): State {
         val prefs = c.getSharedPreferences("svitlo", Context.MODE_PRIVATE)
-        val group = prefs.getString("group", "")!!
+        val group = place?.group ?: ""
         val data = try { JSONObject(prefs.getString("json", "{}")!!).optJSONObject(group) } catch (e: Exception) { null }
 
         val cal = Calendar.getInstance(zone)
@@ -89,14 +89,14 @@ object Schedule {
         val clock = if (end >= 1440 && end % 1440 != 0) "завтра " + time(end % 1440)
             else if (end > 1440) "кінця завтра" else if (end == 1440) "24:00" else time(end)
         val headline = when {
-            group.isEmpty() -> "Оберіть адресу"
+            group.isEmpty() -> "Додайте локацію"
             today?.status == "EmergencyShutdowns" -> "Екстрені відключення"
             power == Power.ON -> "Світло є до $clock"
             power == Power.OFF -> "Без світла до $clock"
             else -> "Немає даних"
         }
         val detail = when {
-            group.isEmpty() -> "Торкніться, щоб визначити чергу"
+            group.isEmpty() -> "Торкніться, щоб налаштувати"
             today?.status == "EmergencyShutdowns" -> "Графік тимчасово не діє"
             power == Power.UNKNOWN -> "Оновіть, коли буде інтернет"
             else -> "За графіком Yasno, не фактичний стан"
