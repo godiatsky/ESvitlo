@@ -70,12 +70,11 @@ class AllWidget : AppWidgetProvider() {
             val shown: Int
             when {
                 n == 0 -> { full = 0; shown = 0 }
-                n * minFull <= avail -> { full = n; shown = n }          // усі повні, рівномірно
                 minFull + (n - 1) * row <= avail -> { full = 1; shown = n } // одна повна, решта тонкі
                 n * row <= avail -> { full = 0; shown = n }              // усі тонкі
                 else -> { avail -= 14; full = 0; shown = (avail / row).coerceIn(1, n) }
             }
-            val barHeight = if (full == 0) 30 else ((avail - (shown - full) * row) / full - head).coerceIn(30, 56)
+            val barHeight = if (full == 0) 30 else (avail - (shown - 1) * row - head).coerceIn(30, 56)
 
             val v = RemoteViews(c.packageName, R.layout.widget_all)
             v.removeAllViews(R.id.rows)
