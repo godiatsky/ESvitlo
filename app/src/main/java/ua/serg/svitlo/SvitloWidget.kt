@@ -39,9 +39,12 @@ class SvitloWidget : AppWidgetProvider() {
         fun render(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(ComponentName(context, SvitloWidget::class.java))
-            if (ids.isEmpty()) return
+            val allIds = manager.getAppWidgetIds(ComponentName(context, AllWidget::class.java))
+            if (ids.isEmpty() && allIds.isEmpty()) return
             val landscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            var next: Int? = null
+            var next: Int? = if (allIds.isEmpty()) null else
+                Places.all(context).mapNotNull { Schedule.load(context, it).nextChange }.minOrNull()
+            for (id in allIds) AllWidget.draw(context, manager, id)
             for (id in ids) {
                 val place = Places.forWidget(context, id)
                 val s = Schedule.load(context, place)

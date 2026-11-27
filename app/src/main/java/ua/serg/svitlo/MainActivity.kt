@@ -79,9 +79,10 @@ class MainActivity : Activity() {
 
     private fun show() {
         val places = Places.all(this)
-        val place = places.firstOrNull { it.id == selected } ?: places.firstOrNull()
-        selected = place?.id ?: 0L
-        val s = Schedule.load(this, place)
+        val all = selected == -1L && places.size > 1
+        val place = if (all) null else places.firstOrNull { it.id == selected } ?: places.firstOrNull()
+        selected = if (all) -1L else place?.id ?: 0L
+        val s = Schedule.load(this, place ?: places.firstOrNull())
         val width = (resources.configuration.screenWidthDp - 80).coerceAtMost(480)
         fun bar(day: Day?, now: Int?) = ImageView(this).apply {
             setImageBitmap(Timeline.draw(this@MainActivity, day, now, width))
@@ -95,6 +96,19 @@ class MainActivity : Activity() {
         }
         column.addView(text("Світло", 34f, bold = true))
         column.addView(chips(places))
+        if (all) {
+            for (p in places) {
+                val state = Schedule.load(this, p)
+                val status = text(state.headline, 15f, R.color.sub, true)
+                if (state.power != Power.UNKNOWN) status.setTextColor(Timeline.color(this, state.power))
+                val item = card(text("${p.icon}  ${p.name}", 17f, bold = true), status, bar(state.today, state.now))
+                item.setOnClickListener { selected = p.id; show() }
+                column.addView(item)
+            }
+            column.addView(text(s.footer, 12f, R.color.sub).apply { setPadding(dp(4), dp(12), 0, 0) })
+            display(column)
+            return
+        }
 
         val headline = text(s.headline, 28f, bold = true).apply {
             setTextColor(if (s.power == Power.UNKNOWN) getColor(R.color.text) else Timeline.color(context, s.power))
@@ -149,6 +163,10 @@ class MainActivity : Activity() {
         column.addView(refresh)
         column.addView(text(s.footer, 12f, R.color.sub).apply { setPadding(dp(4), dp(12), 0, 0) })
 
+        display(column)
+    }
+
+    private fun display(column: View) {
         val old = (findViewById<View>(android.R.id.content) as? android.view.ViewGroup)?.getChildAt(0)
         val y = old?.scrollY ?: 0
         val scroll = ScrollView(this).apply { fitsSystemWindows = true; addView(column) }
@@ -234,6 +252,7 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(dp(76), -2))
             row.addView(view)
         }
+        if (places.size > 1) chip("🗂️", "Всі", selected == -1L) { selected = -1L; show() }
         places.forEach { p -> chip(p.icon, p.name, p.id == selected) { selected = p.id; show() } }
         chip("➕", "Додати", false) { add() }
         return HorizontalScrollView(this).apply {

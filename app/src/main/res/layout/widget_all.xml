@@ -1,0 +1,9 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:gravity="center_vertical"
+    android:paddingHorizontal="14dp" android:paddingVertical="8dp" android:background="@drawable/card">
+    <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical"/>
+    <TextView android:id="@+id/note" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:maxLines="1" android:ellipsize="end" android:textColor="@color/sub" android:textSize="11sp"/>
+</LinearLayout>

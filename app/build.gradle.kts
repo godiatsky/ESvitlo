@@ -9,8 +9,8 @@ android {
         applicationId = "ua.serg.svitlo"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "7.0"
+        versionCode = 8
+        versionName = "8.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
