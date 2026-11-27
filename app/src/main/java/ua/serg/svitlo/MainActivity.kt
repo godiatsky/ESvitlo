@@ -178,6 +178,17 @@ class MainActivity : Activity() {
             column.addView(card(signals))
         }
 
+        val lock = Switch(this).apply {
+            text = "Стан на екрані блокування"
+            textSize = 16f
+            setTextColor(getColor(R.color.text))
+            isChecked = Status.enabled(this@MainActivity)
+            setOnCheckedChangeListener { _, on ->
+                prefs.edit().putBoolean("status", on).apply()
+                Status.update(this@MainActivity)
+            }
+        }
+        column.addView(card(lock))
         column.addView(alertRow("Сигнал перед відключенням", "leadOff"))
         column.addView(alertRow("Сигнал перед увімкненням", "leadOn"))
         val mode = Alerts.mode(this)

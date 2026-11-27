@@ -40,7 +40,7 @@ class SvitloWidget : AppWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(ComponentName(context, SvitloWidget::class.java))
             val allIds = manager.getAppWidgetIds(ComponentName(context, AllWidget::class.java))
-            if (ids.isEmpty() && allIds.isEmpty()) return
+            Status.update(context)
             val places = Places.all(context)
             for (id in allIds) AllWidget.draw(context, manager, id)
             for (id in ids) {
