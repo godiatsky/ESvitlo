@@ -49,35 +49,40 @@ class AllWidget : AppWidgetProvider() {
             Power.UNKNOWN -> R.color.sub
         })
 
-        fun draw(c: Context, manager: AppWidgetManager, id: Int) {
+        fun draw(c: Context, manager: AppWidgetManager, id: Int) =
+            draw(c, manager, id, Places.all(c)) { promote(c, it) }
+
+        /** Перша локація показується великою, решта тонкими рядками. */
+        fun draw(c: Context, manager: AppWidgetManager, id: Int, places: List<Place>, promote: (Long) -> PendingIntent) {
             val o = manager.getAppWidgetOptions(id)
             val landscape = c.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val width = o.getInt(if (landscape) AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH
                 else AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
             val height = o.getInt(if (landscape) AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT
-                else AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 220)
-            val places = Places.all(c)
-            // Основна ≈ 92dp, кожна другорядна 40dp
-            val shown = if (places.isEmpty() || 92 + (places.size - 1) * 40 <= height - 16) places.size
-                else 1 + ((height - 16 - 92 - 16) / 40).coerceAtLeast(0)
+                else AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 180)
+            val states = places.map { Schedule.load(c, it) }
+            val stale = states.any { it.stale }
+            // Шапка основної ≈ 42dp, її шкала 30–56dp, кожен тонкий рядок 34dp, примітка 14dp
+            var avail = height - 16 - (if (stale) 14 else 0)
+            val shown = if (places.isEmpty() || 42 + 30 + (places.size - 1) * 34 <= avail) places.size
+                else { avail -= 14; 1 + ((avail - 42 - 30) / 34).coerceAtLeast(0) }
+            val barHeight = (avail - 42 - (shown - 1).coerceAtLeast(0) * 34).coerceIn(30, 56)
 
             val v = RemoteViews(c.packageName, R.layout.widget_all)
             v.removeAllViews(R.id.rows)
-            var stale = false
             places.take(shown).forEachIndexed { i, place ->
-                val s = Schedule.load(c, place)
-                stale = stale || s.stale
+                val s = states[i]
                 val row = RemoteViews(c.packageName, if (i == 0) R.layout.widget_main else R.layout.widget_row)
                 row.setTextViewText(R.id.icon, place.icon)
                 row.setTextViewText(R.id.name, place.name)
                 row.setTextViewText(R.id.status, s.headline)
                 row.setTextColor(R.id.status, color(c, s.power))
                 if (i == 0) {
-                    row.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 28, 48))
+                    row.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 28, barHeight))
                     row.setOnClickPendingIntent(R.id.main, open(c, place.id))
                 } else {
                     row.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 60, 6, false))
-                    row.setOnClickPendingIntent(R.id.row, promote(c, place.id))
+                    row.setOnClickPendingIntent(R.id.row, promote(place.id))
                 }
                 v.addView(R.id.rows, row)
             }

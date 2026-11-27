@@ -74,6 +74,9 @@ object Places {
         return list.firstOrNull { it.id == id } ?: list.firstOrNull()
     }
 
+    fun setForWidget(c: Context, widget: Int, place: Long) =
+        prefs(c).edit().putLong("widget_$widget", place).apply()
+
     fun next(c: Context, widget: Int) {
         val list = all(c)
         if (list.isEmpty()) return
