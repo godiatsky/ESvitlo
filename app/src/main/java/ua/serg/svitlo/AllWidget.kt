@@ -62,29 +62,41 @@ class AllWidget : AppWidgetProvider() {
                 else AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 180)
             val states = places.map { Schedule.load(c, it) }
             val stale = states.any { it.stale }
-            // Шапка основної ≈ 42dp, її шкала 30–56dp, кожен тонкий рядок 34dp, примітка 14dp
+            // Повна картка: шапка 42dp + шкала від 30dp. Тонкий рядок 34dp. Примітка 14dp.
+            val head = 42; val minFull = head + 30; val row = 34
+            val n = places.size
             var avail = height - 16 - (if (stale) 14 else 0)
-            val shown = if (places.isEmpty() || 42 + 30 + (places.size - 1) * 34 <= avail) places.size
-                else { avail -= 14; 1 + ((avail - 42 - 30) / 34).coerceAtLeast(0) }
-            val barHeight = (avail - 42 - (shown - 1).coerceAtLeast(0) * 34).coerceIn(30, 56)
+            val full: Int
+            val shown: Int
+            when {
+                n == 0 -> { full = 0; shown = 0 }
+                n * minFull <= avail -> { full = n; shown = n }          // усі повні, рівномірно
+                minFull + (n - 1) * row <= avail -> { full = 1; shown = n } // одна повна, решта тонкі
+                n * row <= avail -> { full = 0; shown = n }              // усі тонкі
+                else -> { avail -= 14; full = 0; shown = (avail / row).coerceIn(1, n) }
+            }
+            val barHeight = if (full == 0) 30 else ((avail - (shown - full) * row) / full - head).coerceIn(30, 56)
 
             val v = RemoteViews(c.packageName, R.layout.widget_all)
             v.removeAllViews(R.id.rows)
             places.take(shown).forEachIndexed { i, place ->
                 val s = states[i]
-                val row = RemoteViews(c.packageName, if (i == 0) R.layout.widget_main else R.layout.widget_row)
-                row.setTextViewText(R.id.icon, place.icon)
-                row.setTextViewText(R.id.name, place.name)
-                row.setTextViewText(R.id.status, s.headline)
-                row.setTextColor(R.id.status, color(c, s.power))
-                if (i == 0) {
-                    row.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 28, barHeight))
-                    row.setOnClickPendingIntent(R.id.main, open(c, place.id))
+                val big = i < full
+                val view = RemoteViews(c.packageName, if (big) R.layout.widget_main else R.layout.widget_row)
+                view.setTextViewText(R.id.icon, place.icon)
+                view.setTextViewText(R.id.name, place.name)
+                view.setTextViewText(R.id.status, s.headline)
+                view.setTextColor(R.id.status, color(c, s.power))
+                if (big) {
+                    view.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 28, barHeight))
+                    view.setOnClickPendingIntent(R.id.main, open(c, place.id))
                 } else {
-                    row.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 60, 6, false))
-                    row.setOnClickPendingIntent(R.id.row, promote(place.id))
+                    view.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 60, 6, false))
+                    // «⇧» має сенс, лише коли є повна картка, на місце якої можна підняти
+                    view.setViewVisibility(R.id.hint, if (full > 0) View.VISIBLE else View.GONE)
+                    view.setOnClickPendingIntent(R.id.row, if (full > 0) promote(place.id) else open(c, place.id))
                 }
-                v.addView(R.id.rows, row)
+                v.addView(R.id.rows, view)
             }
             val note = listOfNotNull(
                 if (places.isEmpty()) "Торкніться, щоб додати локацію" else null,
