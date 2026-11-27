@@ -22,11 +22,32 @@ class AllWidget : AppWidgetProvider() {
         SvitloWidget.render(context)
     }
 
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == PROMOTE) {
+            Places.promote(context, intent.getLongExtra("place", 0))
+            SvitloWidget.render(context)
+        }
+    }
+
     companion object {
+        private const val PROMOTE = "ua.serg.svitlo.PROMOTE"
+
         private fun open(c: Context, place: Long) = PendingIntent.getActivity(c, 0,
             Intent(c, MainActivity::class.java).putExtra("place", place)
                 .setData(android.net.Uri.parse("svitlo://place/$place")),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        private fun promote(c: Context, place: Long) = PendingIntent.getBroadcast(c, 0,
+            Intent(c, AllWidget::class.java).setAction(PROMOTE).putExtra("place", place)
+                .setData(android.net.Uri.parse("svitlo://promote/$place")),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        private fun color(c: Context, p: Power) = c.getColor(when (p) {
+            Power.ON -> R.color.on
+            Power.OFF -> R.color.off
+            Power.UNKNOWN -> R.color.sub
+        })
 
         fun draw(c: Context, manager: AppWidgetManager, id: Int) {
             val o = manager.getAppWidgetOptions(id)
@@ -36,26 +57,28 @@ class AllWidget : AppWidgetProvider() {
             val height = o.getInt(if (landscape) AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT
                 else AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 220)
             val places = Places.all(c)
-            val fit = ((height - 16) / 58).coerceAtLeast(1)
-            val shown = if (places.size <= fit) places.size else ((height - 36) / 58).coerceAtLeast(1)
+            // Основна ≈ 92dp, кожна другорядна 40dp
+            val shown = if (places.isEmpty() || 92 + (places.size - 1) * 40 <= height - 16) places.size
+                else 1 + ((height - 16 - 92 - 16) / 40).coerceAtLeast(0)
 
             val v = RemoteViews(c.packageName, R.layout.widget_all)
             v.removeAllViews(R.id.rows)
             var stale = false
-            for (place in places.take(shown)) {
+            places.take(shown).forEachIndexed { i, place ->
                 val s = Schedule.load(c, place)
                 stale = stale || s.stale
-                val row = RemoteViews(c.packageName, R.layout.widget_row)
+                val row = RemoteViews(c.packageName, if (i == 0) R.layout.widget_main else R.layout.widget_row)
                 row.setTextViewText(R.id.icon, place.icon)
                 row.setTextViewText(R.id.name, place.name)
                 row.setTextViewText(R.id.status, s.headline)
-                row.setTextColor(R.id.status, c.getColor(when (s.power) {
-                    Power.ON -> R.color.on
-                    Power.OFF -> R.color.off
-                    Power.UNKNOWN -> R.color.sub
-                }))
-                row.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 72, 34))
-                row.setOnClickPendingIntent(R.id.row, open(c, place.id))
+                row.setTextColor(R.id.status, color(c, s.power))
+                if (i == 0) {
+                    row.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 28, 48))
+                    row.setOnClickPendingIntent(R.id.main, open(c, place.id))
+                } else {
+                    row.setImageViewBitmap(R.id.bar, Timeline.draw(c, s.today, s.now, width - 60, 6, false))
+                    row.setOnClickPendingIntent(R.id.row, promote(c, place.id))
+                }
                 v.addView(R.id.rows, row)
             }
             val note = listOfNotNull(

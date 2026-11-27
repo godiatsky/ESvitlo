@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.NotificationManager
+import android.content.ClipData
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -11,6 +12,7 @@ import android.media.AudioManager
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
+import android.view.DragEvent
 import android.view.Gravity
 import android.os.Build
 import android.os.Bundle
@@ -97,12 +99,50 @@ class MainActivity : Activity() {
         column.addView(text("Світло", 34f, bold = true))
         column.addView(chips(places))
         if (all) {
-            for (p in places) {
-                val state = Schedule.load(this, p)
-                val status = text(state.headline, 15f, R.color.sub, true)
-                if (state.power != Power.UNKNOWN) status.setTextColor(Timeline.color(this, state.power))
-                val item = card(text("${p.icon}  ${p.name}", 17f, bold = true), status, bar(state.today, state.now))
-                item.setOnClickListener { selected = p.id; show() }
+            val main = places.first()
+            val ms = Schedule.load(this, main)
+            val status = text(ms.headline, 22f, bold = true)
+            if (ms.power != Power.UNKNOWN) status.setTextColor(Timeline.color(this, ms.power))
+            val top = card(text("${main.icon}  ${main.name}", 15f, R.color.sub, true), status,
+                text(ms.detail, 13f, R.color.sub), bar(ms.today, ms.now))
+            top.setOnClickListener { selected = main.id; show() }
+            top.setOnDragListener { v, e ->
+                when (e.action) {
+                    DragEvent.ACTION_DRAG_ENTERED -> v.alpha = 0.6f
+                    DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> v.alpha = 1f
+                    DragEvent.ACTION_DROP -> { Places.promote(this, e.localState as Long); changed() }
+                }
+                true
+            }
+            column.addView(top)
+            column.addView(text("⇧ або перетягніть угору, щоб зробити основною", 12f, R.color.sub)
+                .apply { setPadding(dp(4), dp(14), 0, dp(2)) })
+            for (p in places.drop(1)) {
+                val st = Schedule.load(this, p)
+                val head = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+                head.addView(text("${p.icon}  ${p.name}", 15f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                val state = text(st.headline, 13f, R.color.sub)
+                if (st.power != Power.UNKNOWN) state.setTextColor(Timeline.color(this, st.power))
+                head.addView(state)
+                val up = text("⇧", 20f, R.color.accent, true).apply {
+                    setPadding(dp(14), 0, 0, 0)
+                    contentDescription = "Зробити основною"
+                }
+                head.addView(up)
+                val thin = ImageView(this).apply {
+                    setImageBitmap(Timeline.draw(this@MainActivity, st.today, st.now, width, 6, false))
+                    scaleType = ImageView.ScaleType.FIT_XY
+                    layoutParams = LinearLayout.LayoutParams(-1, dp(6)).apply { topMargin = dp(8) }
+                }
+                val item = card(head, thin).apply {
+                    setPadding(dp(16), dp(12), dp(16), dp(12))
+                    (layoutParams as LinearLayout.LayoutParams).topMargin = dp(8)
+                }
+                item.setOnClickListener { Places.promote(this, p.id); changed() }
+                item.setOnLongClickListener { v ->
+                    v.startDragAndDrop(ClipData.newPlainText("place", "${p.id}"), View.DragShadowBuilder(v), p.id, 0)
+                    true
+                }
                 column.addView(item)
             }
             column.addView(text(s.footer, 12f, R.color.sub).apply { setPadding(dp(4), dp(12), 0, 0) })

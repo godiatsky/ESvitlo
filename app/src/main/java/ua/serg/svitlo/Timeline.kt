@@ -11,17 +11,18 @@ object Timeline {
     })
 
     /** Шкала доби: штрихування = відключення, минуле приглушене, підписані моменти перемикань. */
-    fun draw(c: Context, day: Day?, now: Int?, widthDp: Int, heightDp: Int = 44): Bitmap {
+    fun draw(c: Context, day: Day?, now: Int?, widthDp: Int, heightDp: Int = 44, labels: Boolean = true): Bitmap {
         val d = c.resources.displayMetrics.density.coerceAtMost(3f)
         val w = widthDp.coerceIn(180, 480) * d
         val h = heightDp * d
         val bmp = Bitmap.createBitmap(w.toInt(), h.toInt(), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        val top = 3 * d
-        val bottom = h - 19 * d
+        val top = if (labels) 3 * d else 0f
+        val bottom = if (labels) h - 19 * d else h
+        val radius = minOf(8 * d, (bottom - top) / 2)
         fun x(m: Int) = w * m / 1440
-        val clip = Path().apply { addRoundRect(0f, top, w, bottom, 8 * d, 8 * d, Path.Direction.CW) }
+        val clip = Path().apply { addRoundRect(0f, top, w, bottom, radius, radius, Path.Direction.CW) }
         canvas.save()
         canvas.clipPath(clip)
         p.color = color(c, Power.UNKNOWN)
@@ -50,8 +51,9 @@ object Timeline {
         if (now != null) {
             val m = x(now).coerceIn(2 * d, w - 2 * d)
             p.color = c.getColor(R.color.text)
-            canvas.drawRoundRect(m - 1.5f * d, 0f, m + 1.5f * d, bottom + 3 * d, 1.5f * d, 1.5f * d, p)
+            canvas.drawRoundRect(m - 1.5f * d, 0f, m + 1.5f * d, minOf(h, bottom + 3 * d), 1.5f * d, 1.5f * d, p)
         }
+        if (!labels) return bmp
         p.color = c.getColor(R.color.text)
         p.textSize = 11 * d
         val changes = if (day != null && day.known)

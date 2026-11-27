@@ -61,6 +61,13 @@ object Places {
 
     fun delete(c: Context, id: Long) = write(c, all(c).filter { it.id != id })
 
+    /** Робить локацію основною: переносить її на перше місце. */
+    fun promote(c: Context, id: Long) {
+        val list = all(c)
+        val place = list.firstOrNull { it.id == id } ?: return
+        write(c, listOf(place) + list.filter { it.id != id })
+    }
+
     fun forWidget(c: Context, widget: Int): Place? {
         val list = all(c)
         val id = prefs(c).getLong("widget_$widget", 0)
