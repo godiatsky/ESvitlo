@@ -103,7 +103,7 @@ class MainActivity : Activity() {
             val ms = Schedule.load(this, main)
             val status = text(ms.headline, 22f, bold = true)
             if (ms.power != Power.UNKNOWN) status.setTextColor(Timeline.color(this, ms.power))
-            val top = card(text("${main.icon}  ${main.name}", 15f, R.color.sub, true), status,
+            val top = card(titled(main, 15f, R.color.sub), status,
                 text(ms.detail, 13f, R.color.sub), bar(ms.today, ms.now))
             top.setOnClickListener { selected = main.id; show() }
             top.setOnDragListener { v, e ->
@@ -120,7 +120,7 @@ class MainActivity : Activity() {
             for (p in places.drop(1)) {
                 val st = Schedule.load(this, p)
                 val head = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-                head.addView(text("${p.icon}  ${p.name}", 15f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                head.addView(titled(p, 15f, R.color.text), LinearLayout.LayoutParams(0, -2, 1f))
                 val state = text(st.headline, 13f, R.color.sub)
                 if (st.power != Power.UNKNOWN) state.setTextColor(Timeline.color(this, st.power))
                 head.addView(state)
@@ -160,7 +160,7 @@ class MainActivity : Activity() {
             text(Schedule.summary(s.tomorrow), 15f, R.color.sub)))
 
         if (place != null) {
-            val edit = card(text("${place.icon}  ${place.name}", 17f, bold = true),
+            val edit = card(titled(place, 17f, R.color.text),
                 text("${place.address.ifEmpty { "Адресу не вказано" }}\nЧерга ${place.group}  ·  змінити ›", 14f, R.color.sub))
             edit.setOnClickListener { menu(place) }
             column.addView(edit)
@@ -271,14 +271,15 @@ class MainActivity : Activity() {
 
     private fun chips(places: List<Place>): View {
         val row = LinearLayout(this)
-        fun chip(icon: String, label: String, active: Boolean, click: () -> Unit) {
+        fun chip(icon: Int, label: String, active: Boolean, click: () -> Unit) {
             val view = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 setOnClickListener { click() }
             }
-            view.addView(text(icon, 28f).apply {
-                gravity = Gravity.CENTER
+            view.addView(ImageView(this).apply {
+                setImageResource(icon)
+                setPadding(dp(17), dp(17), dp(17), dp(17))
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
                     setColor(getColor(R.color.card))
@@ -292,9 +293,9 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(dp(76), -2))
             row.addView(view)
         }
-        if (places.size > 1) chip("🗂️", "Всі", selected == -1L) { selected = -1L; show() }
-        places.forEach { p -> chip(p.icon, p.name, p.id == selected) { selected = p.id; show() } }
-        chip("➕", "Додати", false) { add() }
+        if (places.size > 1) chip(R.drawable.ic_t_squares_four, "Всі", selected == -1L) { selected = -1L; show() }
+        places.forEach { p -> chip(Icons.thin(p.icon), p.name, p.id == selected) { selected = p.id; show() } }
+        chip(R.drawable.ic_t_plus, "Додати", false) { add() }
         return HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             setPadding(0, dp(12), 0, 0)
@@ -314,7 +315,7 @@ class MainActivity : Activity() {
 
     private fun menu(place: Place) {
         val items = arrayOf("Іконка та назва", "Адреса або черга", "Видалити локацію")
-        AlertDialog.Builder(this).setTitle("${place.icon} ${place.name}").setItems(items) { _, i ->
+        AlertDialog.Builder(this).setTitle(place.name).setItems(items) { _, i ->
             when (i) {
                 0 -> look(place) { icon, name -> Places.save(this, place.copy(icon = icon, name = name)); changed() }
                 1 -> source { group, address ->
@@ -332,34 +333,42 @@ class MainActivity : Activity() {
         }.show()
     }
 
+    /** Іконка зліва, назва справа. */
+    private fun titled(p: Place, size: Float, color: Int) = LinearLayout(this).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        val side = dp((size * 1.6f).toInt())
+        addView(ImageView(this@MainActivity).apply { setImageResource(Icons.thin(p.icon)) },
+            LinearLayout.LayoutParams(side, side))
+        addView(text(p.name, size, color, true).apply {
+            setPadding(dp(8), 0, 0, 0)
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+        })
+    }
+
     private fun look(place: Place?, done: (icon: String, name: String) -> Unit) {
-        var icon = place?.icon ?: Places.ICONS[0].first
+        var icon = Icons.key(place?.icon ?: "house")
         val name = EditText(this).apply {
-            hint = "Назва"
+            hint = "Назва, напр. Дім"
             isSingleLine = true
-            setText(place?.name ?: Places.ICONS[0].second)
+            setText(place?.name ?: "")
         }
         val grid = GridLayout(this).apply { columnCount = 5 }
-        val cells = ArrayList<TextView>()
+        val cells = ArrayList<ImageView>()
         fun mark() = cells.forEach {
-            it.background = if (it.text.toString() != icon) null else GradientDrawable().apply {
+            it.background = if (it.tag != icon) null else GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setStroke(dp(3), getColor(R.color.accent))
+                setStroke(dp(2), getColor(R.color.accent))
             }
         }
-        for ((emoji, label) in Places.ICONS) {
-            val cell = text(emoji, 28f).apply {
-                gravity = Gravity.CENTER
-                contentDescription = label
+        for (key in Icons.KEYS) {
+            val cell = ImageView(this).apply {
+                setImageResource(Icons.thin(key))
+                tag = key
+                setPadding(dp(12), dp(12), dp(12), dp(12))
                 layoutParams = GridLayout.LayoutParams(GridLayout.spec(GridLayout.UNDEFINED),
                     GridLayout.spec(GridLayout.UNDEFINED, 1f)).apply { width = 0; height = dp(56) }
-            }
-            cell.setOnClickListener {
-                // Назву, яку користувач ввів сам, не перезаписуємо
-                val typed = name.text.toString()
-                if (typed.isBlank() || Places.ICONS.any { it.second == typed }) name.setText(label)
-                icon = emoji
-                mark()
+                setOnClickListener { icon = key; mark() }
             }
             cells.add(cell)
             grid.addView(cell)
@@ -371,12 +380,21 @@ class MainActivity : Activity() {
             addView(grid)
             addView(name)
         }
-        AlertDialog.Builder(this).setTitle(if (place == null) "Нова локація" else "Іконка та назва")
+        val dialog = AlertDialog.Builder(this).setTitle(if (place == null) "Нова локація" else "Іконка та назва")
             .setView(ScrollView(this).apply { addView(box) })
-            .setPositiveButton("Далі") { _, _ ->
+            .setPositiveButton("Далі", null).setNegativeButton("Скасувати", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val typed = name.text.toString().trim()
-                done(icon, typed.ifEmpty { Places.ICONS.first { it.first == icon }.second })
-            }.setNegativeButton("Скасувати", null).show()
+                if (typed.isEmpty()) {
+                    name.error = "Введіть назву"
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                done(icon, typed)
+            }
+        }
+        dialog.show()
     }
 
     private fun source(done: (group: String, address: String) -> Unit) {

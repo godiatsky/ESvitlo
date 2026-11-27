@@ -82,7 +82,7 @@ class AllWidget : AppWidgetProvider() {
                 val s = states[i]
                 val big = i < full
                 val view = RemoteViews(c.packageName, if (big) R.layout.widget_main else R.layout.widget_row)
-                view.setTextViewText(R.id.icon, place.icon)
+                view.setImageViewResource(R.id.icon, if (big) Icons.thin(place.icon) else Icons.light(place.icon))
                 view.setTextViewText(R.id.name, place.name)
                 view.setTextViewText(R.id.status, s.headline)
                 view.setTextColor(R.id.status, color(c, s.power))

@@ -71,7 +71,7 @@ object Alerts {
             if (prefs.getString(key, "") != mark) {
                 prefs.edit().putString(key, mark).apply()
                 val action = if (target == Power.OFF) "вимкнуть" else "увімкнуть"
-                notify(c, noticeId(place.id, type), "${place.icon} ${place.name}: о ${Schedule.time(m % 1440)} $action світло",
+                notify(c, noticeId(place.id, type), "${place.name}: о ${Schedule.time(m % 1440)} $action світло",
                     "Залишилось ${Schedule.duration(maxOf(1, m - s.now))} · черга ${place.group}", target == Power.OFF)
             }
         }

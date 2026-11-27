@@ -11,11 +11,6 @@ data class Place(
 
 /** Збережені локації користувача. */
 object Places {
-    val ICONS = listOf(
-        "🏠" to "Дім", "💼" to "Робота", "💅" to "Манікюр", "🛒" to "Магазин", "🔧" to "Майстерня",
-        "🏋️" to "Спортзал", "🏫" to "Школа", "☕" to "Кав’ярня", "❤️" to "Рідні", "🏡" to "Дача"
-    )
-
     private fun prefs(c: Context) = c.getSharedPreferences("svitlo", Context.MODE_PRIVATE)
 
     @Synchronized
@@ -26,7 +21,7 @@ object Places {
             // Перенесення єдиної адреси з попередньої версії
             val group = p.getString("group", "")!!
             if (group.isEmpty()) return emptyList()
-            val home = Place(1, "Дім", "🏠", group, p.getString("address", "")!!, true)
+            val home = Place(1, "Дім", "house", group, p.getString("address", "")!!, true)
             write(c, listOf(home))
             return listOf(home)
         }
